@@ -4,9 +4,11 @@ import sys
 import random
 import json
 from _datetime import datetime
+from openpyxl import Workbook
 
 URL = 'https://www.coursera.org/sitemap~www~courses.xml'
-COURSES_AMOUNT = 1
+COURSES_AMOUNT = 20
+PATH_TO_SAVE = 'courses.xlsx'
 
 
 def fetch(url):
@@ -57,7 +59,7 @@ def get_course_info(course_slug):
         '%Y-%m-%d',
     )
     return {'title': json_content['@graph'][2]['name'],
-            'language': h4s[-1].string,
+            'language': str(h4s[-1].string),
             'startdate': startdate.date(),
             'weeks': round((enddate - startdate).days / 7),
             'rating': json_content['@graph'][1]['aggregateRating'][
@@ -65,8 +67,27 @@ def get_course_info(course_slug):
             }
 
 
-def output_courses_info_to_xlsx(filepath):
-    pass
+def output_courses_info_to_xlsx(courses_info_list, filepath):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Courses'
+
+    ws.cell(row=1, column=1, value='Title')
+    ws.cell(row=1, column=2, value='Language')
+    ws.cell(row=1, column=3, value='Startdate')
+    ws.cell(row=1, column=4, value='Weeks')
+    ws.cell(row=1, column=5, value='Rating')
+
+    row = 2
+    for course in courses_info_list:
+        ws.cell(row=row, column=1, value=course['title'])
+        ws.cell(row=row, column=2, value=course['language'])
+        ws.cell(row=row, column=3, value=course['startdate'])
+        ws.cell(row=row, column=4, value=course['weeks'])
+        ws.cell(row=row, column=5, value=course['rating'])
+        row += 1
+
+    wb.save(filepath)
 
 
 if __name__ == '__main__':
@@ -74,8 +95,8 @@ if __name__ == '__main__':
     if not courses_list:
         sys.exit('ERROR')
     random_courses_list = get_random_courses_list(courses_list, COURSES_AMOUNT)
-
-    course_info = get_course_info(random_courses_list[0])
-
-    for k, v in course_info.items():
-        print('{}: {}'.format(k, v))
+    courses_info_list = []
+    for course in random_courses_list:
+        courses_info_list.append(get_course_info(course))
+    output_courses_info_to_xlsx(courses_info_list, PATH_TO_SAVE)
+    print('Courses have been safed to {}'.format(PATH_TO_SAVE))
