@@ -8,13 +8,13 @@ from openpyxl import Workbook
 from tqdm import tqdm
 
 URL = 'https://www.coursera.org/sitemap~www~courses.xml'
-COURSES_AMOUNT = 5
+COURSES_AMOUNT = 20
 PATH_TO_SAVE = 'courses.xlsx'
 
 
 def fetch(url):
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         return response.content
     except requests.RequestException:
         return
@@ -39,17 +39,17 @@ def get_random_courses_list(courses_list, amount):
     return random_courses_list
 
 
-def get_course_infooo(course_slug):
-    content = fetch(course_slug)
+def get_course_info(course_url):
+    content = fetch(course_url)
     if not content:
         return
     soup = BeautifulSoup(content, 'html.parser')
-    h4s = soup.find_all(
+    h4_tag_list = soup.find_all(
         'h4',
         class_='H4_1k76nzj-o_O-weightBold_uvlhiv-o_O-bold_1byw3y2'
     )
-    script = soup.find('script', type='application/ld+json')
-    json_content = json.loads(script.string)
+    script_tag = soup.find('script', type='application/ld+json')
+    json_content = json.loads(script_tag.string)
 
     startdate = datetime.strptime(
         json_content['@graph'][2]['hasCourseInstance']['startDate'],
@@ -59,42 +59,13 @@ def get_course_infooo(course_slug):
         json_content['@graph'][2]['hasCourseInstance']['endDate'],
         '%Y-%m-%d',
     )
-    return {'title': json_content['@graph'][2]['name'],
-            'language': str(h4s[-1].string),
-            'startdate': startdate.date(),
-            'weeks': round((enddate - startdate).days / 7),
-            'rating': json_content['@graph'][1]['aggregateRating'][
-                'ratingValue'],
-            }
-
-
-def get_course_info(course_slug):
-    content = fetch(course_slug)
-    if not content:
-        return
-    soup = BeautifulSoup(content, 'html.parser')
-    h4s = soup.find_all(
-        'h4',
-        class_='H4_1k76nzj-o_O-weightBold_uvlhiv-o_O-bold_1byw3y2'
-    )
-    script = soup.find('script', type='application/ld+json')
-    json_content = json.loads(script.string)
-
-    startdate = datetime.strptime(
-        json_content['@graph'][2]['hasCourseInstance']['startDate'],
-        '%Y-%m-%d',
-    )
-    enddate = datetime.strptime(
-        json_content['@graph'][2]['hasCourseInstance']['endDate'],
-        '%Y-%m-%d',
-    )
-    return {'title': json_content['@graph'][2]['name'],
-            'language': str(h4s[-1].string),
-            'startdate': startdate.date(),
-            'weeks': round((enddate - startdate).days / 7),
-            'rating': json_content['@graph'][1]['aggregateRating'][
-                'ratingValue'],
-            }
+    return {
+        'title': json_content['@graph'][2]['name'],
+        'language': str(h4_tag_list[-1].string),
+        'startdate': startdate.date(),
+        'weeks': round((enddate - startdate).days / 7),
+        'rating': json_content['@graph'][1]['aggregateRating']['ratingValue'],
+    }
 
 
 def get_courses_info_list(courses_list):
@@ -108,6 +79,8 @@ def get_courses_info_list(courses_list):
         for course in courses_list:
             progressbar.__next__()
             course_info = get_course_info(course)
+            if not course_info:
+                return
             courses_info_list.append(course_info)
         progressbar.__next__()
     except StopIteration:
@@ -148,7 +121,8 @@ if __name__ == '__main__':
         COURSES_AMOUNT,
     )
     courses_info_list = get_courses_info_list(random_courses_list)
-
+    if not courses_info_list:
+        sys.exit("Server doesn't response or connection error")
     output_courses_info_to_xlsx(
         courses_info_list,
         PATH_TO_SAVE,
