@@ -40,43 +40,6 @@ def get_random_courses_list(courses_list, amount):
     return random_courses_list
 
 
-def get_course_infooo(course_url):
-    content = fetch(course_url)
-    if not content:
-        return
-    soup = BeautifulSoup(content, 'html.parser')
-    try:
-        h4_tag_list = soup.find_all(
-            'h4',
-            class_='H4_1k76nzj-o_O-weightBold_uvlhiv-o_O-bold_1byw3y2'
-        )
-        script_tag = soup.find('script', type='application/ld+json')
-        json_content = json.loads(script_tag.string)
-
-        startdate = datetime.strptime(
-            json_content['@graph'][2]['hasCourseInstance']['startDate'],
-            '%Y-%m-%d',
-        )
-        enddate = datetime.strptime(
-            json_content['@graph'][2]['hasCourseInstance']['endDate'],
-            '%Y-%m-%d',
-        )
-        return {
-            'title': json_content['@graph'][2]['name'],
-            'language': str(h4_tag_list[-1].string),
-            'startdate': startdate.date(),
-            'weeks': round((enddate - startdate).days / 7),
-            'rating': json_content['@graph'][1]['aggregateRating'][
-                'ratingValue'],
-        }
-    except (
-            KeyError,
-            AttributeError,
-    ) as e:
-        print('ERROR!..{}, course: {}'.format(e, course_url))
-        return
-
-
 def get_course_info(course_url):
     content = fetch(course_url)
     if not content:
@@ -192,6 +155,7 @@ if __name__ == '__main__':
     )
     print('Courses have been safed to {}'.format(PATH_TO_SAVE))
     print()
-    print('ERRORS:')
-    for course in ERROR_COURSES_LIST:
-        print(course)
+    if len(ERROR_COURSES_LIST) > 0:
+        print('ERRORS:')
+        for course in ERROR_COURSES_LIST:
+            print(course)
