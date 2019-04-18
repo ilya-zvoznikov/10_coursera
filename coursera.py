@@ -21,8 +21,7 @@ def fetch(url):
         return
 
 
-def get_courses_list(url):
-    content = fetch(url)
+def get_courses_urls_list(content):
     if not content:
         return
     soup = BeautifulSoup(content, 'lxml')
@@ -32,28 +31,17 @@ def get_courses_list(url):
     return courses_list
 
 
-def get_random_courses_list(courses_list, amount):
-    random_courses_list = []
-    for _ in range(amount):
-        course = random.choice(courses_list)
-        random_courses_list.append(course)
-    return random_courses_list
-
-
 def get_course_title(soup):
     try:
-        title_tag = soup.find('title')
-        return str(title_tag.string).replace(' | Coursera', '')
+        h1_tag = soup.find_all('h1')[1]
+        return str(h1_tag.string)
     except AttributeError:
         return
 
 
 def get_course_language(soup):
     try:
-        h4_tag_list = soup.find_all(
-            'h4',
-            class_='H4_1k76nzj-o_O-weightBold_uvlhiv-o_O-bold_1byw3y2'
-        )
+        h4_tag_list = soup.find_all('h4')
         return str(h4_tag_list[-1].string)
     except (KeyError, AttributeError):
         return
@@ -92,8 +80,7 @@ def get_course_rating(soup):
         return
 
 
-def get_course_info(course_url):
-    content = fetch(course_url)
+def get_course_info(content):
     if not content:
         return
     soup = BeautifulSoup(content, 'html.parser')
@@ -112,19 +99,24 @@ def get_course_info(course_url):
     }
 
 
-def get_courses_info_list(courses_list):
+def get_courses_info_list(courses_urls_list):
+    # ДЛЯ ПРОВЕРЯЮЩЕГО:
+    # tqdm не работает с функциями iter() и next()
+    # по крайней мере, у меня не получилось
+    # использование __iter__() и __next__() - вынужденная мера
     courses_info_list = []
     progressbar = tqdm(
-        courses_list,
+        courses_urls_list,
         desc='Getting courses info',
         leave=False,
     ).__iter__()
     try:
-        for course in courses_list:
+        for course_url in courses_urls_list:
             progressbar.__next__()
-            course_info = get_course_info(course)
+            content = fetch(course_url)
+            course_info = get_course_info(content)
             if not course_info:
-                ERROR_COURSES_LIST.append(course)
+                ERROR_COURSES_LIST.append(course_url)
                 continue
             courses_info_list.append(course_info)
         progressbar.__next__()
@@ -134,7 +126,7 @@ def get_courses_info_list(courses_list):
     return courses_info_list
 
 
-def output_courses_info_to_xlsx(courses_info_list, filepath):
+def get_excel_wb(courses_info_list):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Courses'
@@ -155,24 +147,23 @@ def output_courses_info_to_xlsx(courses_info_list, filepath):
                    course['rating'],
                    ])
 
-    wb.save(filepath)
+    return wb
 
 
 if __name__ == '__main__':
-    courses_list = get_courses_list(URL)
-    if not courses_list:
+    content = fetch(URL)
+    courses_urls_list = get_courses_urls_list(content)
+    if not courses_urls_list:
         sys.exit("Server doesn't response or connection error")
-    random_courses_list = get_random_courses_list(
-        courses_list,
+    random_courses_urls_list = random.sample(
+        courses_urls_list,
         COURSES_AMOUNT,
     )
-    courses_info_list = get_courses_info_list(random_courses_list)
+    courses_info_list = get_courses_info_list(random_courses_urls_list)
     if not courses_info_list:
         sys.exit("Server doesn't response or connection error")
-    output_courses_info_to_xlsx(
-        courses_info_list,
-        PATH_TO_SAVE,
-    )
+    excel_wb = get_excel_wb(courses_info_list)
+    excel_wb.save(PATH_TO_SAVE)
     print('Courses have been safed to {}'.format(PATH_TO_SAVE))
     print()
     if ERROR_COURSES_LIST:
