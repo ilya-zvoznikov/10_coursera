@@ -6,11 +6,30 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from openpyxl import Workbook
 from tqdm import tqdm
+import argparse
 
 URL = 'https://www.coursera.org/sitemap~www~courses.xml'
-COURSES_AMOUNT = 20
-ERROR_COURSES_LIST = []
-PATH_TO_SAVE = 'courses.xlsx'
+
+
+def get_args():
+    parser = argparse.ArgumentParser(
+        description='The app "Coursers Dump" takes 20 random courses '
+                    'from Coursera.org and pushes them to Excel file.')
+    parser.add_argument(
+        '--path',
+        '-p',
+        default='courses.xlsx',
+        help='path to save Excel file',
+    )
+    parser.add_argument(
+        '--amount',
+        '-a',
+        type=int,
+        default=20,
+        help='amount of courses for loading and saving',
+    )
+    args = parser.parse_args()
+    return [args.path, args.amount]
 
 
 def fetch(url):
@@ -116,7 +135,7 @@ def get_courses_info_list(courses_urls_list):
             content = fetch(course_url)
             course_info = get_course_info(content)
             if not course_info:
-                ERROR_COURSES_LIST.append(course_url)
+                error_courses_list.append(course_url)
                 continue
             courses_info_list.append(course_info)
         progressbar.__next__()
@@ -151,22 +170,33 @@ def get_excel_wb(courses_info_list):
 
 
 if __name__ == '__main__':
+    path_to_save, courses_amount = get_args()
     content = fetch(URL)
     courses_urls_list = get_courses_urls_list(content)
+    error_courses_list = []
     if not courses_urls_list:
         sys.exit("Server doesn't response or connection error")
-    random_courses_urls_list = random.sample(
-        courses_urls_list,
-        COURSES_AMOUNT,
-    )
+    try:
+        random_courses_urls_list = random.sample(
+            courses_urls_list,
+            courses_amount,
+        )
+    except ValueError:
+        sys.exit("Amount of courses is incorrect")
     courses_info_list = get_courses_info_list(random_courses_urls_list)
     if not courses_info_list:
         sys.exit("Server doesn't response or connection error")
     excel_wb = get_excel_wb(courses_info_list)
-    excel_wb.save(PATH_TO_SAVE)
-    print('Courses have been safed to {}'.format(PATH_TO_SAVE))
+    try:
+        excel_wb.save(path_to_save)
+    except FileNotFoundError:
+        sys.exit('Path to save is incorrect')
+    print('{} courses have been safed to {}'.format(
+        courses_amount,
+        path_to_save,
+    ))
     print()
-    if ERROR_COURSES_LIST:
+    if error_courses_list:
         print('ERRORS:')
-        for course in ERROR_COURSES_LIST:
+        for course in error_courses_list:
             print(course)
