@@ -1,12 +1,11 @@
-import json
 import random
 import requests
 import sys
 from bs4 import BeautifulSoup
-from datetime import datetime
 from openpyxl import Workbook
 from tqdm import tqdm
 import argparse
+from course_info import get_course_info
 
 URL = 'https://www.coursera.org/sitemap~www~courses.xml'
 
@@ -32,7 +31,7 @@ def get_args():
     return [args.path, args.amount]
 
 
-def fetch(url):
+def fetch_content(url):
     try:
         response = requests.get(url, timeout=10)
         return response.content
@@ -50,72 +49,11 @@ def get_courses_urls_list(content):
     return courses_list
 
 
-def get_course_title(soup):
+def get_random_courses_urls_list(urls_list, courses_amount):
     try:
-        h1_tag = soup.find_all('h1')[1]
-        return str(h1_tag.string)
-    except AttributeError:
+        return random.sample(urls_list, courses_amount)
+    except ValueError:
         return
-
-
-def get_course_language(soup):
-    try:
-        h4_tag_list = soup.find_all('h4')
-        return str(h4_tag_list[-1].string)
-    except (KeyError, AttributeError):
-        return
-
-
-def get_course_startdate_and_weeks(soup):
-    try:
-        script_tag = soup.find('script', type='application/ld+json')
-        json_content = json.loads(script_tag.string)
-        graph = json_content['@graph']
-        start_datetime = datetime.strptime(
-            graph[2]['hasCourseInstance']['startDate'],
-            '%Y-%m-%d',
-        )
-        startdate = start_datetime.date()
-
-        end_datetime = datetime.strptime(
-            graph[2]['hasCourseInstance']['endDate'],
-            '%Y-%m-%d',
-        )
-        weeks = round((end_datetime - start_datetime).days / 7)
-        return [startdate, weeks]
-    except (AttributeError, KeyError):
-        return [None, None]
-
-
-def get_course_rating(soup):
-    try:
-        script_tag = soup.find('script', type='application/ld+json')
-        json_content = json.loads(script_tag.string)
-        graph = json_content['@graph']
-
-        rating = graph[1]['aggregateRating']['ratingValue']
-        return rating
-    except (AttributeError, KeyError):
-        return
-
-
-def get_course_info(content):
-    if not content:
-        return
-    soup = BeautifulSoup(content, 'html.parser')
-
-    title = get_course_title(soup)
-    language = get_course_language(soup)
-    startdate, weeks = get_course_startdate_and_weeks(soup)
-    rating = get_course_rating(soup)
-
-    return {
-        'title': title,
-        'language': language,
-        'startdate': startdate,
-        'weeks': weeks,
-        'rating': rating,
-    }
 
 
 def get_courses_info_list(courses_urls_list):
@@ -124,6 +62,7 @@ def get_courses_info_list(courses_urls_list):
     # по крайней мере, у меня не получилось
     # использование __iter__() и __next__() - вынужденная мера
     courses_info_list = []
+    error_courses_list = []
     progressbar = tqdm(
         courses_urls_list,
         desc='Getting courses info',
@@ -132,7 +71,7 @@ def get_courses_info_list(courses_urls_list):
     try:
         for course_url in courses_urls_list:
             progressbar.__next__()
-            content = fetch(course_url)
+            content = fetch_content(course_url)
             course_info = get_course_info(content)
             if not course_info:
                 error_courses_list.append(course_url)
@@ -142,7 +81,7 @@ def get_courses_info_list(courses_urls_list):
 
     except StopIteration:
         pass
-    return courses_info_list
+    return [courses_info_list, error_courses_list]
 
 
 def get_excel_wb(courses_info_list):
@@ -169,34 +108,41 @@ def get_excel_wb(courses_info_list):
     return wb
 
 
-if __name__ == '__main__':
-    path_to_save, courses_amount = get_args()
-    content = fetch(URL)
-    courses_urls_list = get_courses_urls_list(content)
-    error_courses_list = []
-    if not courses_urls_list:
-        sys.exit("Server doesn't response or connection error")
+def save_to_excel_file(workbook, path_to_save, courses_amount):
     try:
-        random_courses_urls_list = random.sample(
-            courses_urls_list,
+        workbook.save(path_to_save)
+        return '{} courses have been safed to {}'.format(
             courses_amount,
+            path_to_save,
         )
-    except ValueError:
-        sys.exit("Amount of courses is incorrect")
-    courses_info_list = get_courses_info_list(random_courses_urls_list)
-    if not courses_info_list:
-        sys.exit("Server doesn't response or connection error")
-    excel_wb = get_excel_wb(courses_info_list)
-    try:
-        excel_wb.save(path_to_save)
     except FileNotFoundError:
-        sys.exit('Path to save is incorrect')
-    print('{} courses have been safed to {}'.format(
-        courses_amount,
-        path_to_save,
-    ))
+        return 'Path to save is incorrect'
+
+
+def print_errors(error_courses_list):
     print()
     if error_courses_list:
         print('ERRORS:')
         for course in error_courses_list:
             print(course)
+
+
+if __name__ == '__main__':
+    path_to_save, courses_amount = get_args()
+    content = fetch_content(URL)
+    courses_urls_list = get_courses_urls_list(content)
+    if not courses_urls_list:
+        sys.exit("Server doesn't response or connection error")
+    random_courses_urls_list = get_random_courses_urls_list(
+        courses_urls_list,
+        courses_amount,
+    )
+    if not random_courses_urls_list:
+        sys.exit("Amount of courses is incorrect")
+    courses_info_list, error_courses_list = get_courses_info_list(
+        random_courses_urls_list)
+    if not courses_info_list:
+        sys.exit("Server doesn't response or connection error")
+    excel_wb = get_excel_wb(courses_info_list)
+    print(save_to_excel_file(excel_wb, path_to_save, courses_amount))
+    print_errors(error_courses_list)
