@@ -6,7 +6,7 @@ from datetime import datetime
 def get_course_title(soup):
     try:
         h1_tag = soup.find_all('h1')[1]
-        return str(h1_tag.string)
+        return h1_tag.text
     except AttributeError:
         return
 
@@ -19,34 +19,21 @@ def get_course_language(soup):
         return
 
 
-def get_course_startdate_and_weeks(soup):
+def get_course_startdate_and_weeks(info_dict):
     try:
-        script_tag = soup.find('script', type='application/ld+json')
-        json_content = json.loads(script_tag.string)
-        graph = json_content['@graph']
-        start_datetime = datetime.strptime(
-            graph[2]['hasCourseInstance']['startDate'],
-            '%Y-%m-%d',
-        )
+        hci = info_dict['@graph'][2]['hasCourseInstance']
+        start_datetime = datetime.strptime(hci['startDate'], '%Y-%m-%d')
         startdate = start_datetime.date()
-
-        end_datetime = datetime.strptime(
-            graph[2]['hasCourseInstance']['endDate'],
-            '%Y-%m-%d',
-        )
+        end_datetime = datetime.strptime(hci['endDate'], '%Y-%m-%d')
         weeks = round((end_datetime - start_datetime).days / 7)
         return [startdate, weeks]
     except (AttributeError, KeyError):
         return [None, None]
 
 
-def get_course_rating(soup):
+def get_course_rating(info_dict):
     try:
-        script_tag = soup.find('script', type='application/ld+json')
-        json_content = json.loads(script_tag.string)
-        graph = json_content['@graph']
-
-        rating = graph[1]['aggregateRating']['ratingValue']
+        rating = info_dict['@graph'][1]['aggregateRating']['ratingValue']
         return rating
     except (AttributeError, KeyError):
         return
@@ -59,9 +46,16 @@ def get_course_info(content):
 
     title = get_course_title(soup)
     language = get_course_language(soup)
-    startdate, weeks = get_course_startdate_and_weeks(soup)
-    rating = get_course_rating(soup)
 
+    script_tag = soup.find('script', type='application/ld+json')
+    if script_tag:
+        course_info_dict = json.loads(script_tag.string)
+        startdate, weeks = get_course_startdate_and_weeks(course_info_dict)
+        rating = get_course_rating(course_info_dict)
+    else:
+        startdate = None
+        weeks = None
+        rating = None
     return {
         'title': title,
         'language': language,
@@ -69,4 +63,3 @@ def get_course_info(content):
         'weeks': weeks,
         'rating': rating,
     }
-

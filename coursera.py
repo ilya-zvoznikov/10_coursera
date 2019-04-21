@@ -57,27 +57,23 @@ def get_random_courses_urls_list(urls_list, courses_amount):
 
 
 def get_courses_info_list(courses_urls_list):
-    # ДЛЯ ПРОВЕРЯЮЩЕГО:
-    # tqdm не работает с функциями iter() и next()
-    # по крайней мере, у меня не получилось
-    # использование __iter__() и __next__() - вынужденная мера
     courses_info_list = []
     error_courses_list = []
-    progressbar = tqdm(
+    progressbar = iter(tqdm(
         courses_urls_list,
         desc='Getting courses info',
         leave=False,
-    ).__iter__()
+    ))
     try:
         for course_url in courses_urls_list:
-            progressbar.__next__()
+            next(progressbar)
             content = fetch_content(course_url)
             course_info = get_course_info(content)
             if not course_info:
                 error_courses_list.append(course_url)
                 continue
             courses_info_list.append(course_info)
-        progressbar.__next__()
+        next(progressbar)
 
     except StopIteration:
         pass
@@ -98,12 +94,13 @@ def get_excel_wb(courses_info_list):
     ])
 
     for course in courses_info_list:
-        ws.append([course['title'],
-                   course['language'],
-                   course['startdate'],
-                   course['weeks'],
-                   course['rating'],
-                   ])
+        ws.append([
+            course['title'],
+            course['language'],
+            course['startdate'],
+            course['weeks'],
+            course['rating'],
+        ])
 
     return wb
 
